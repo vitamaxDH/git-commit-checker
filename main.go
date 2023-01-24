@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
@@ -9,6 +10,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -36,7 +38,17 @@ var (
 )
 
 func main() {
-	dir := "C:\\daehan\\development\\projects"
+	var dir string
+	flag.StringVar(&dir, "d", "", "Search repos of the given directory")
+	commitCountPtr := flag.Int("cc", 5, "Search commits of each branch")
+
+	flag.Parse()
+
+	if dir == "" {
+		fmt.Println("Please input option d to search repos")
+		os.Exit(1)
+	}
+
 	file, err := os.Open(dir)
 	CheckIfError(err)
 
@@ -60,7 +72,7 @@ func main() {
 		}
 	}
 
-	m := New(repoMap)
+	m := New(repoMap, *commitCountPtr)
 	_, err = tea.NewProgram(m, tea.WithAltScreen()).Run()
 	if err != nil {
 		fmt.Printf("Error: %v", err)
@@ -73,10 +85,11 @@ type Model struct {
 	focused     columnType
 	repoMap     map[string]*git.Repository
 	columns     []list.Model
+	commitCount int
 }
 
-func New(repoMap map[string]*git.Repository) *Model {
-	return &Model{repoMap: repoMap}
+func New(repoMap map[string]*git.Repository, commitCount int) *Model {
+	return &Model{repoMap: repoMap, commitCount: commitCount}
 }
 
 func (m Model) Init() tea.Cmd {
