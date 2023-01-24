@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/go-git/go-git/v5"
@@ -66,12 +67,13 @@ func main() {
 }
 
 type Model struct {
-	dir         string
-	loaded      bool
-	emptyColumn list.Model
-	focused     columnType
-	columns     []list.Model
-	option      InitOption
+	loadingSpinner spinner.Model
+	dir            string
+	loaded         bool
+	emptyColumn    list.Model
+	focused        columnType
+	columns        []list.Model
+	option         InitOption
 }
 
 type InitOption struct {
@@ -80,11 +82,14 @@ type InitOption struct {
 }
 
 func New(dir string, option InitOption) *Model {
-	return &Model{dir: dir, option: option}
+	s := spinner.New()
+	s.Spinner = spinner.Dot
+	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+	return &Model{dir: dir, option: option, loadingSpinner: s}
 }
 
 func (m Model) Init() tea.Cmd {
-	return nil
+	return m.loadingSpinner.Tick
 }
 
 func (m *Model) Next() {
@@ -352,6 +357,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "right", "l":
 			m.Next()
 		}
+	default:
+		var cmd tea.Cmd
+		m.loadingSpinner, cmd = m.loadingSpinner.Update(msg)
+		return m, cmd
 	}
 	var cmd tea.Cmd
 	m.columns[m.focused], cmd = m.columns[m.focused].Update(msg)
@@ -394,9 +403,8 @@ func (m Model) View() string {
 				columnStyle.Render(commitView),
 			)
 		}
-	} else {
-		return "loading..."
 	}
+	return fmt.Sprintf("\n\n   %s Loading forever...press q to quit\n\n", m.loadingSpinner.View())
 }
 
 func CheckIfError(err error) {
