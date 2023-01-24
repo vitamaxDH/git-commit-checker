@@ -196,13 +196,15 @@ func (c Commit) Title() string {
 }
 
 func (c Commit) Description() string {
-	return fmt.Sprintf("%s", c.msg)
+	return fmt.Sprintf("%s", c.hash[:6])
 }
 
 func (m *Model) initColumns(width, height int) {
-	defaultList := NewListModel(width, height)
-	m.emptyColumn = defaultList
-	m.columns = []list.Model{defaultList, defaultList, defaultList}
+	repoList := NewListModel(200, height)
+	branchList := NewListModel(200, height)
+	commitList := NewListModel(500, height)
+	m.emptyColumn = repoList
+	m.columns = []list.Model{repoList, branchList, commitList}
 
 	file, err := os.Open(m.dir)
 	CheckIfError(err)
@@ -317,7 +319,7 @@ func putRepo(dir string, fileInfo fs.FileInfo, repoMap map[string]*git.Repositor
 }
 
 func NewListModel(width, height int) list.Model {
-	defaultList := list.New([]list.Item{}, list.NewDefaultDelegate(), width/columnDivisor, height-heightOffset)
+	defaultList := list.New([]list.Item{}, list.NewDefaultDelegate(), width, height-heightOffset)
 	keyMap := list.DefaultKeyMap()
 	keyMap.PrevPage = key.NewBinding(
 		key.WithKeys("b"),
