@@ -235,7 +235,7 @@ func (m *Model) initLists(width, height int) {
 			var commitItems []list.Item
 			i := 0
 			err = log.ForEach(func(c *object.Commit) error {
-				if i < 5 {
+				if i < m.commitCount {
 					commitItems = append(commitItems, Commit{
 						hash: c.Hash.String(),
 						msg:  c.Message,
