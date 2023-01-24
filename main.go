@@ -314,7 +314,15 @@ func putRepo(dir string, fileInfo fs.FileInfo, repoMap map[string]*git.Repositor
 }
 
 func NewListModel(width, height int) list.Model {
-	defaultList := list.New([]list.Item{}, list.NewDefaultDelegate(), width/divisor, height-divisor)
+	defaultList := list.New([]list.Item{}, list.NewDefaultDelegate(), width/columnDivisor, height-heightOffset)
+	keyMap := list.DefaultKeyMap()
+	keyMap.PrevPage = key.NewBinding(
+		key.WithKeys("b"),
+	)
+	keyMap.NextPage = key.NewBinding(
+		key.WithKeys(" "),
+	)
+	defaultList.KeyMap = keyMap
 	defaultList.SetShowHelp(false)
 	return defaultList
 }
