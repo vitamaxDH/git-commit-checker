@@ -9,6 +9,7 @@ import (
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,15 +33,15 @@ var (
 	focusedStyle = lipgloss.NewStyle().
 			Padding(1, 2).
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("62")).
-			BorderTop(false).
-			BorderBottom(false)
+			BorderForeground(lipgloss.Color("62"))
 )
 
 func main() {
 	var dir string
 	flag.StringVar(&dir, "d", "", "Search repos of the given directory")
+
 	commitCountPtr := flag.Int("cc", 5, "Search commits of each branch")
+	recursivePtr := flag.Bool("r", false, "Fine repositories recursively")
 
 	flag.Parse()
 
@@ -49,47 +50,33 @@ func main() {
 		os.Exit(1)
 	}
 
-	file, err := os.Open(dir)
-	CheckIfError(err)
-
-	fileInfos, err := file.Readdir(-1)
-	CheckIfError(err)
-
-	if len(fileInfos) == 0 {
-		fmt.Printf("There's no local repoMap under %v\n", dir)
-		os.Exit(1)
-	}
-
-	repoMap := map[string]*git.Repository{}
-	for _, fileInfo := range fileInfos {
-		if fileInfo.IsDir() {
-			localRepoDir := filepath.Join(dir, fileInfo.Name())
-			r, err := git.PlainOpen(localRepoDir)
-			if err != nil {
-				continue
-			}
-			repoMap[fileInfo.Name()] = r
-		}
-	}
-
-	m := New(repoMap, *commitCountPtr)
-	_, err = tea.NewProgram(m, tea.WithAltScreen()).Run()
+	m := New(dir, InitOption{
+		commitCount: *commitCountPtr,
+		recursive:   *recursivePtr,
+	})
+	_, err := tea.NewProgram(m, tea.WithAltScreen()).Run()
 	if err != nil {
 		fmt.Printf("Error: %v", err)
+		os.Exit(1)
 	}
 }
 
 type Model struct {
+	dir         string
 	loaded      bool
 	emptyColumn list.Model
 	focused     columnType
-	repoMap     map[string]*git.Repository
 	columns     []list.Model
-	commitCount int
+	option      InitOption
 }
 
-func New(repoMap map[string]*git.Repository, commitCount int) *Model {
-	return &Model{repoMap: repoMap, commitCount: commitCount}
+type InitOption struct {
+	commitCount int
+	recursive   bool
+}
+
+func New(dir string, option InitOption) *Model {
+	return &Model{dir: dir, option: option}
 }
 
 func (m Model) Init() tea.Cmd {
@@ -209,14 +196,35 @@ func (c Commit) Description() string {
 	return fmt.Sprintf("%s", c.msg)
 }
 
-func (m *Model) initLists(width, height int) {
+func (m *Model) initColumns(width, height int) {
 	defaultList := NewListModel(width, height)
 	m.emptyColumn = defaultList
 	m.columns = []list.Model{defaultList, defaultList, defaultList}
 
+	file, err := os.Open(m.dir)
+	CheckIfError(err)
+
+	fileInfos, err := file.Readdir(-1)
+	CheckIfError(err)
+
+	if len(fileInfos) == 0 {
+		fmt.Printf("There's no files under %v\n", m.dir)
+		os.Exit(1)
+	}
+
+	repoMap := map[string]*git.Repository{}
+	for _, fileInfo := range fileInfos {
+		if fileInfo.IsDir() {
+			if !putRepo(m.dir, fileInfo, repoMap) && m.option.recursive {
+				childDir := filepath.Join(m.dir, fileInfo.Name())
+				readReposRecursive(childDir, repoMap)
+			}
+		}
+	}
+
 	m.columns[repoColumn].Title = "Repository"
 	var repoItems []list.Item
-	for dirName, repo := range m.repoMap {
+	for dirName, repo := range repoMap {
 		var branchItems []list.Item
 		branch, err := repo.Branches()
 		CheckIfError(err)
@@ -235,7 +243,7 @@ func (m *Model) initLists(width, height int) {
 			var commitItems []list.Item
 			i := 0
 			err = log.ForEach(func(c *object.Commit) error {
-				if i < m.commitCount {
+				if i < m.option.commitCount {
 					commitItems = append(commitItems, Commit{
 						hash: c.Hash.String(),
 						msg:  c.Message,
@@ -274,6 +282,37 @@ func (m *Model) initLists(width, height int) {
 	}
 }
 
+func readReposRecursive(dir string, repoMap map[string]*git.Repository) {
+	file, err := os.Open(dir)
+	if err != nil {
+		return
+	}
+
+	fileInfos, err := file.Readdir(-1)
+	if err != nil {
+		return
+	}
+
+	for _, fileInfo := range fileInfos {
+		if fileInfo.IsDir() {
+			if !putRepo(dir, fileInfo, repoMap) {
+				childDir := filepath.Join(dir, fileInfo.Name())
+				readReposRecursive(childDir, repoMap)
+			}
+		}
+	}
+}
+
+func putRepo(dir string, fileInfo fs.FileInfo, repoMap map[string]*git.Repository) bool {
+	localRepoDir := filepath.Join(dir, fileInfo.Name())
+	r, err := git.PlainOpen(localRepoDir)
+	if err == nil {
+		repoMap[fileInfo.Name()] = r
+		return true
+	}
+	return false
+}
+
 func NewListModel(width, height int) list.Model {
 	defaultList := list.New([]list.Item{}, list.NewDefaultDelegate(), width/divisor, height)
 	defaultList.SetShowHelp(false)
@@ -284,7 +323,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		if !m.loaded {
-			m.initLists(msg.Width, msg.Height)
+			m.initColumns(msg.Width, msg.Height)
 			m.loaded = true
 		}
 	case tea.KeyMsg:
