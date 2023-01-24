@@ -354,6 +354,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Up()
 		case "down":
 			m.Down()
+		// Todo: need to implement
+		//case "b":
+		//	m.PrevPage()
+		//case " ":
+		//	m.NextPage()
 		case "right", "l":
 			m.Next()
 		}
