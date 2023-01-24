@@ -7,11 +7,13 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/object"
 	"os"
 	"strings"
+	"time"
 )
 
-const divisor = 4
+const divisor = 3
 
 type columnType int
 
@@ -31,8 +33,6 @@ var (
 			BorderForeground(lipgloss.Color("62")).
 			BorderTop(false).
 			BorderBottom(false)
-	helpStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("241"))
 )
 
 func main() {
@@ -68,10 +68,11 @@ func main() {
 }
 
 type Model struct {
-	loaded  bool
-	focused columnType
-	repoMap map[string]*git.Repository
-	columns []list.Model
+	loaded      bool
+	emptyColumn list.Model
+	focused     columnType
+	repoMap     map[string]*git.Repository
+	columns     []list.Model
 }
 
 func New(repoMap map[string]*git.Repository) *Model {
@@ -98,18 +99,51 @@ func (m *Model) Prev() {
 	}
 }
 
-func (m *Model) ChangeColumn() {
+func (m *Model) Up() {
 	switch m.focused {
 	case repoColumn:
-		repoItem := m.columns[repoColumn].SelectedItem()
+		m.ChangeBranches(-1)
+		m.ChangeCommits()
+	case branchColumn:
+		m.ChangeCommits()
+	}
+}
+
+func (m *Model) Down() {
+	switch m.focused {
+	case repoColumn:
+		m.ChangeBranches(1)
+		m.ChangeCommits()
+	case branchColumn:
+		m.ChangeCommits()
+	}
+}
+
+func (m *Model) ChangeBranches(delta int) {
+	repoColumn := m.columns[repoColumn]
+	repoCount := len(repoColumn.Items())
+	nextIdx := repoColumn.Cursor() + delta
+	if 0 <= nextIdx && nextIdx < repoCount {
+		repoItem := repoColumn.Items()[nextIdx]
 		m.columns[branchColumn] = repoItem.(Repo).branches
+	}
+}
+
+func (m *Model) ChangeCommits() {
+	if len(m.columns[branchColumn].Items()) > 0 {
+		branchCursor := m.columns[branchColumn].Cursor()
+		branch := m.columns[branchColumn].Items()[branchCursor].(Branch)
+		m.columns[commitColumn] = branch.commits
+	} else {
+		m.columns[commitColumn] = m.emptyColumn
 	}
 }
 
 type Repo struct {
 	columnType
-	title    string
-	branches list.Model
+	title        string
+	lastSelected int
+	branches     list.Model
 }
 
 func (r Repo) FilterValue() string {
@@ -121,13 +155,14 @@ func (r Repo) Title() string {
 }
 
 func (r Repo) Description() string {
-	return fmt.Sprintf("%d branchColumn(es)", len(r.branches.Items()))
+	return fmt.Sprintf("%d branch(es)", len(r.branches.Items()))
 }
 
 type Branch struct {
-	name       string
-	lastCommit string
-	commits    list.Model
+	name         string
+	lastCommit   string
+	lastSelected int
+	commits      list.Model
 }
 
 func (b Branch) FilterValue() string {
@@ -139,13 +174,14 @@ func (b Branch) Title() string {
 }
 
 func (b Branch) Description() string {
-	return "branchColumn description"
+	latestCommit := b.commits.Items()[0].(Commit)
+	return fmt.Sprintf("latest commit at %v", latestCommit.when)
 }
 
 type Commit struct {
 	hash string
 	msg  string
-	time string
+	when time.Time
 }
 
 func (c Commit) FilterValue() string {
@@ -157,25 +193,53 @@ func (c Commit) Title() string {
 }
 
 func (c Commit) Description() string {
-	return "commitColumn description"
+	return fmt.Sprintf("%s", c.msg)
 }
 
 func (m *Model) initLists(width, height int) {
 	defaultList := NewListModel(width, height)
+	m.emptyColumn = defaultList
 	m.columns = []list.Model{defaultList, defaultList, defaultList}
 
 	m.columns[repoColumn].Title = "Repository"
 	var repoItems []list.Item
 	for dirName, repo := range m.repoMap {
 		var branchItems []list.Item
-		b, err := repo.Branches()
+		branch, err := repo.Branches()
 		CheckIfError(err)
-		err = b.ForEach(func(br *plumbing.Reference) error {
-			// Todo: add 10 commits
+		err = branch.ForEach(func(br *plumbing.Reference) error {
 			branchPrefix := "refs/heads/"
 			name := strings.TrimPrefix(br.Name().String(), branchPrefix)
+
+			b := plumbing.NewBranchReferenceName(name)
+			CheckIfError(err)
+			ref, err := repo.Reference(b, true)
+
+			log, err := repo.Log(&git.LogOptions{
+				From:  ref.Hash(),
+				Order: git.LogOrderCommitterTime,
+			})
+			var commitItems []list.Item
+			i := 0
+			err = log.ForEach(func(c *object.Commit) error {
+				if i < 5 {
+					commitItems = append(commitItems, Commit{
+						hash: c.Hash.String(),
+						msg:  c.Message,
+						when: c.Committer.When,
+					})
+					i++
+					return nil
+				}
+				return nil
+			})
+			CheckIfError(err)
+			commits := NewListModel(width, height)
+			commits.Title = "Commit"
+			commits.SetItems(commitItems)
 			branchItems = append(branchItems, Branch{
-				name: name,
+				name:    name,
+				commits: commits,
 			})
 			return nil
 		})
@@ -187,13 +251,18 @@ func (m *Model) initLists(width, height int) {
 	}
 
 	m.columns[repoColumn].SetItems(repoItems)
-	m.columns[repoColumn].Select(0)
-	repo := m.columns[repoColumn].SelectedItem().(Repo)
+	repoItem := m.columns[repoColumn].Items()[0]
+	repo := repoItem.(Repo)
 	m.columns[branchColumn] = repo.branches
+	if len(repo.branches.Items()) > 0 {
+		branchItem := m.columns[branchColumn].Items()[0]
+		branch := branchItem.(Branch)
+		m.columns[commitColumn] = branch.commits
+	}
 }
 
 func NewListModel(width, height int) list.Model {
-	defaultList := list.New([]list.Item{}, list.NewDefaultDelegate(), width, height)
+	defaultList := list.New([]list.Item{}, list.NewDefaultDelegate(), width/divisor, height)
 	defaultList.SetShowHelp(false)
 	return defaultList
 }
@@ -212,9 +281,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "left", "h":
 			m.Prev()
 		case "up":
-			m.ChangeColumn()
+			m.Up()
 		case "down":
-			m.ChangeColumn()
+			m.Down()
 		case "right", "l":
 			m.Next()
 		}
@@ -228,8 +297,7 @@ func (m Model) View() string {
 	if m.loaded {
 		repoView := m.columns[repoColumn].View()
 		branchView := m.columns[branchColumn].View()
-		// Todo: Add commits
-		//branchItem := repoColumn.branchView.SelectedItem()
+		commitView := m.columns[commitColumn].View()
 
 		switch m.focused {
 		case repoColumn:
@@ -237,18 +305,28 @@ func (m Model) View() string {
 				lipgloss.Left,
 				focusedStyle.Render(repoView),
 				columnStyle.Render(branchView),
+				columnStyle.Render(commitView),
 			)
 		case branchColumn:
 			return lipgloss.JoinHorizontal(
 				lipgloss.Left,
 				columnStyle.Render(repoView),
 				focusedStyle.Render(branchView),
+				columnStyle.Render(commitView),
+			)
+		case commitColumn:
+			return lipgloss.JoinHorizontal(
+				lipgloss.Left,
+				columnStyle.Render(repoView),
+				columnStyle.Render(branchView),
+				focusedStyle.Render(commitView),
 			)
 		default:
 			return lipgloss.JoinHorizontal(
 				lipgloss.Left,
 				focusedStyle.Render(repoView),
 				columnStyle.Render(branchView),
+				columnStyle.Render(commitView),
 			)
 		}
 	} else {
