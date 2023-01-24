@@ -63,8 +63,8 @@ func main() {
 	repoMap := map[string]*git.Repository{}
 	for _, fileInfo := range fileInfos {
 		if fileInfo.IsDir() {
-			localRepo := fmt.Sprintf("%s\\%s", dir, fileInfo.Name())
-			r, err := git.PlainOpen(localRepo)
+			localRepoDir := filepath.Join(dir, fileInfo.Name())
+			r, err := git.PlainOpen(localRepoDir)
 			if err != nil {
 				continue
 			}
