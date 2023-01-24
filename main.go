@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -16,7 +17,10 @@ import (
 	"time"
 )
 
-const divisor = 4
+const (
+	columnDivisor = 4
+	heightOffset  = 4
+)
 
 type columnType int
 
@@ -103,7 +107,6 @@ func (m *Model) Up() {
 	switch m.focused {
 	case repoColumn:
 		m.ChangeBranches(-1)
-		m.ChangeCommits()
 	case branchColumn:
 		m.ChangeCommits()
 	}
@@ -113,7 +116,6 @@ func (m *Model) Down() {
 	switch m.focused {
 	case repoColumn:
 		m.ChangeBranches(1)
-		m.ChangeCommits()
 	case branchColumn:
 		m.ChangeCommits()
 	}
@@ -176,7 +178,7 @@ func (b Branch) Title() string {
 
 func (b Branch) Description() string {
 	latestCommit := b.commits.Items()[0].(Commit)
-	return fmt.Sprintf("latest commit at %v", latestCommit.when)
+	return fmt.Sprintf("latest at %v", latestCommit.when.Format("2006-01-02 15:04:05"))
 }
 
 type Commit struct {
