@@ -3,7 +3,6 @@
 This project is to simply check latest git commits by branch, repository
 
 ## Tutorial
----
 
 
 ### Prerequisite
@@ -29,5 +28,11 @@ go mod tidy
 - `-cc`: number of latest commits of each branch
 
 ```bash
-go run main.js -d ~/projects/ -r -cc=10
+go run main.go -d ~/projects/ -r -cc=10
 ```
+---
+
+## KeyMap
+
+- `space`: Next page of a focused column
+- `b`: Prev page of a focused column
