@@ -58,7 +58,7 @@ func main() {
 		commitCount: *commitCountPtr,
 		recursive:   *recursivePtr,
 	})
-	_, err := tea.NewProgram(m, tea.WithAltScreen()).Run()
+	_, err := tea.NewProgram(m).Run()
 	if err != nil {
 		fmt.Printf("Error: %v", err)
 		os.Exit(1)
@@ -260,7 +260,7 @@ func (m *Model) initColumns(width, height int) {
 				return nil
 			})
 			CheckIfError(err)
-			commits := NewListModel(width, height)
+			commits := NewListModel(500, height)
 			commits.Title = "Commit"
 			commits.SetItems(commitItems)
 			branchItems = append(branchItems, Branch{
@@ -270,7 +270,7 @@ func (m *Model) initColumns(width, height int) {
 			return nil
 		})
 		CheckIfError(err)
-		branches := NewListModel(width, height)
+		branches := NewListModel(200, height)
 		branches.Title = "Branch"
 		branches.SetItems(branchItems)
 		repoItems = append(repoItems, Repo{title: dirName, branches: branches})
