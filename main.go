@@ -122,17 +122,18 @@ func (m *Model) Down() {
 func (m *Model) ChangeBranches(delta int) {
 	repoColumn := m.columns[repoColumn]
 	repoCount := len(repoColumn.Items())
-	nextIdx := repoColumn.Cursor() + delta
+	nextIdx := repoColumn.Index() + delta
 	if 0 <= nextIdx && nextIdx < repoCount {
 		repoItem := repoColumn.Items()[nextIdx]
 		m.columns[branchColumn] = repoItem.(Repo).branches
+		m.ChangeCommits()
 	}
 }
 
 func (m *Model) ChangeCommits() {
 	if len(m.columns[branchColumn].Items()) > 0 {
-		branchCursor := m.columns[branchColumn].Cursor()
-		branch := m.columns[branchColumn].Items()[branchCursor].(Branch)
+		branchIdx := m.columns[branchColumn].Index()
+		branch := m.columns[branchColumn].Items()[branchIdx].(Branch)
 		m.columns[commitColumn] = branch.commits
 	} else {
 		m.columns[commitColumn] = m.emptyColumn
