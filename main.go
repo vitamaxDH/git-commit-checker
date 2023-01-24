@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-const divisor = 3
+const divisor = 4
 
 type columnType int
 
@@ -29,7 +29,7 @@ const ( //indices to determine which list is focused
 /*  STYLING*/
 var (
 	columnStyle = lipgloss.NewStyle().
-			Padding(1, 2)
+			Padding(2, 2)
 	focusedStyle = lipgloss.NewStyle().
 			Padding(1, 2).
 			Border(lipgloss.RoundedBorder()).
@@ -314,7 +314,7 @@ func putRepo(dir string, fileInfo fs.FileInfo, repoMap map[string]*git.Repositor
 }
 
 func NewListModel(width, height int) list.Model {
-	defaultList := list.New([]list.Item{}, list.NewDefaultDelegate(), width/divisor, height)
+	defaultList := list.New([]list.Item{}, list.NewDefaultDelegate(), width/divisor, height-divisor)
 	defaultList.SetShowHelp(false)
 	return defaultList
 }
