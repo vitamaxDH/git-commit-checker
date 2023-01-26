@@ -45,7 +45,8 @@ func main() {
 	var dir string
 	flag.StringVar(&dir, "d", "", "Search repos of the given directory")
 
-	commitCountPtr := flag.Int("cc", 999999, "Search commits of each branch")
+	branchCountPtr := flag.Int("bc", 20, "Fetch the given number of branches of each repository")
+	commitCountPtr := flag.Int("cc", 999999, "Fetch the given number of commits of each branch")
 	recursivePtr := flag.Bool("r", false, "Fine repositories recursively")
 
 	flag.Parse()
@@ -56,6 +57,7 @@ func main() {
 	}
 
 	m := New(dir, InitOption{
+		branchCount: *branchCountPtr,
 		commitCount: *commitCountPtr,
 		recursive:   *recursivePtr,
 	})
@@ -77,6 +79,7 @@ type Model struct {
 }
 
 type InitOption struct {
+	branchCount int
 	commitCount int
 	recursive   bool
 }
