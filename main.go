@@ -9,12 +9,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 )
 
@@ -238,31 +236,40 @@ func (m *Model) initColumns(width, height int) {
 	m.columns[repoColumn].Title = "Repository"
 	var repoItems []list.Item
 	for dirName, repo := range repoMap {
+		remote, err := repo.Remote("origin")
+		if err != nil {
+			continue
+		}
+		refs, err := remote.List(&git.ListOptions{})
+		if err != nil {
+			continue
+		}
 		var branchItems []list.Item
-		branch, err := repo.Branches()
-		CheckIfError(err)
-		err = branch.ForEach(func(br *plumbing.Reference) error {
-			branchPrefix := "refs/heads/"
-			name := strings.TrimPrefix(br.Name().String(), branchPrefix)
-
-			b := plumbing.NewBranchReferenceName(name)
-			CheckIfError(err)
-			ref, err := repo.Reference(b, true)
-
+		i := 0
+		for _, remoteBranch := range refs {
+			if i >= m.option.branchCount {
+				break
+			}
+			if remoteBranch.Name() == "HEAD" {
+				continue
+			}
 			log, err := repo.Log(&git.LogOptions{
-				From:  ref.Hash(),
+				From:  remoteBranch.Hash(),
 				Order: git.LogOrderCommitterTime,
 			})
+			if err != nil {
+				continue
+			}
 			var commitItems []list.Item
-			i := 0
+			j := 0
 			err = log.ForEach(func(c *object.Commit) error {
-				if i < m.option.commitCount {
+				if j < m.option.commitCount {
 					commitItems = append(commitItems, Commit{
 						hash: c.Hash.String(),
 						msg:  c.Message,
 						when: c.Committer.When,
 					})
-					i++
+					j++
 					return nil
 				}
 				return nil
@@ -272,11 +279,50 @@ func (m *Model) initColumns(width, height int) {
 			commits.Title = "Commit"
 			commits.SetItems(commitItems)
 			branchItems = append(branchItems, Branch{
-				name:    name,
+				name:    remoteBranch.Name().Short(),
 				commits: commits,
 			})
-			return nil
-		})
+			i++
+		}
+
+		/****************** Local Branches Start *******************/
+		//var branchItems []list.Item
+		//branch, err := repo.Branches()
+		//CheckIfError(err)
+		//err = branch.ForEach(func(br *plumbing.Reference) error {
+		//	b := plumbing.NewBranchReferenceName(br.Name().Short())
+		//	CheckIfError(err)
+		//	ref, err := repo.Reference(b, true)
+		//
+		//	log, err := repo.Log(&git.LogOptions{
+		//		From:  ref.Hash(),
+		//		Order: git.LogOrderCommitterTime,
+		//	})
+		//	var commitItems []list.Item
+		//	i := 0
+		//	err = log.ForEach(func(c *object.Commit) error {
+		//		if i < m.option.commitCount {
+		//			commitItems = append(commitItems, Commit{
+		//				hash: c.Hash.String(),
+		//				msg:  c.Message,
+		//				when: c.Committer.When,
+		//			})
+		//			i++
+		//			return nil
+		//		}
+		//		return nil
+		//	})
+		//	CheckIfError(err)
+		//	commits := NewListModel(500, height)
+		//	commits.Title = "Commit"
+		//	commits.SetItems(commitItems)
+		//	branchItems = append(branchItems, Branch{
+		//		name:    br.Name().Short(),
+		//		commits: commits,
+		//	})
+		//	return nil
+		//})
+		/****************** Local Branches End *******************/
 		CheckIfError(err)
 		branches := NewListModel(200, height)
 		branches.Title = "Branch"
