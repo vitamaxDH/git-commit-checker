@@ -44,7 +44,7 @@ func main() {
 	flag.StringVar(&dir, "d", "", "Search repos of the given directory")
 
 	branchCountPtr := flag.Int("bc", 20, "Fetch the given number of branches of each repository")
-	commitCountPtr := flag.Int("cc", 999999, "Fetch the given number of commits of each branch")
+	commitCountPtr := flag.Int("cc", 20, "Fetch the given number of commits of each branch")
 	recursivePtr := flag.Bool("r", false, "Fine repositories recursively")
 
 	flag.Parse()
